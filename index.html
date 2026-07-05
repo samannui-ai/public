@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<link   rel="stylesheet" href="style.css">
+<title>ระบบบัญชาการเหตุฉุกเฉิน</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<!-- Firebase SDK -->
+<script type="module" src="app.js"></script>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="badge-ems">🚨 ระบบฉุกเฉิน</div>
+    <h1>ระบบข้อมูลบัญชาการแผนฉุกเฉิน</h1>
+    <p>EOC - จุดรวมทรัพยากรและผู้ป่วย</p>
+    <input type="text" id="emailInput" placeholder="อีเมล" onkeydown="if(event.key==='Enter')document.getElementById('pwInput').focus()">
+    <input type="password" id="pwInput" placeholder="รหัสผ่าน" onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="login-err" id="loginErr">อีเมลหรือรหัสผ่านไม่ถูกต้อง</div>
+    <button class="btn-primary" onclick="doLogin()" style="margin-top:10px">เข้าสู่ระบบ</button>
+    <p style="font-size:11px;color:#475569;margin-top:14px">🔐 ใช้บัญชีผู้ใช้ที่ได้รับจาก EOC</p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none;min-height:100vh">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-title">⚡ ศูนย์บัญชาการฉุกเฉิน</div>
+      <div class="topbar-sub" id="dateDisplay"></div>
+    </div>
+    <!-- Desktop nav -->
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showTab('dashboard')">📊 Dashboard</button>
+      <button class="nav-tab" onclick="showTab('vehicles')">🚑 ข้อมูลรถ</button>
+      <button class="nav-tab" onclick="showTab('patients')">🏥 ข้อมูลผู้ป่วย</button>
+    </div>
+    <div class="topbar-right">
+      <div class="live-dot"></div>
+      <button class="btn-logout" onclick="doLogout()">ออกจากระบบ</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="tab-dashboard" class="tab-content active">
+
+    <!-- Row 1: Vehicles 70/30 -->
+    <div class="dash-veh-row">
+      <div class="chart-card">
+        <div class="chart-card-title">จำนวนรถแยกตามประเภท</div>
+        <div class="chart-card-sub">ทรัพยากรยานพาหนะทั้งหมดในระบบ</div>
+        <div id="bar-summary" class="bar-summary"></div>
+        <div class="chart-wrap"><canvas id="chartVehType"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">สถานะรถ</div>
+        <div class="chart-card-sub">อยู่จุดเช็คอิน / ออกปฏิบัติงาน</div>
+        <div class="donut-wrap">
+          <canvas id="chartVehStatus"></canvas>
+          <div class="donut-center">
+            <div class="donut-center-num" id="donut-total">0</div>
+            <div class="donut-center-label">คัน</div>
+          </div>
+        </div>
+        <div class="donut-legend">
+          <div class="donut-legend-item">
+            <div class="donut-legend-left"><div class="donut-legend-dot" style="background:#22c55e"></div>อยู่จุดเช็คอิน</div>
+            <div class="donut-legend-val c-green" id="dl-checkin">0</div>
+          </div>
+          <div class="donut-legend-item">
+            <div class="donut-legend-left"><div class="donut-legend-dot" style="background:#f59e0b"></div>ออกปฏิบัติงาน</div>
+            <div class="donut-legend-val c-yellow" id="dl-out">0</div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">กำลังพลรวม (Manpower)</div>
+        <div class="chart-card-sub">จำนวนคนประจำรถแยกตามสถานะ</div>
+        <div class="chart-wrap"><canvas id="chartManpower"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Row 2: Patients -->
+    <div class="dash-pat-row">
+      <div class="chart-card">
+        <div class="chart-card-title">ผู้ป่วยแยกตามระดับ Triage</div>
+        <div class="chart-card-sub">จำแนกตามสีคัดกรอง</div>
+        <div class="chart-wrap"><canvas id="chartTriage"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">การเคลื่อนย้ายผู้ป่วย</div>
+        <div class="chart-card-sub">การจัดการผู้ป่วยปัจจุบัน</div>
+        <div class="donut-wrap">
+          <canvas id="chartPatStatus"></canvas>
+          <div class="donut-center">
+            <div class="donut-center-num" id="donut-pat-total">0</div>
+            <div class="donut-center-label">ราย</div>
+          </div>
+        </div>
+        <div class="donut-legend">
+          <div class="donut-legend-item"><div class="donut-legend-left"><div class="donut-legend-dot" style="background:#f59e0b"></div>จุดคัดแยก</div><div class="donut-legend-val" id="pl-triage" style="color:#f59e0b">0</div></div>
+          <div class="donut-legend-item"><div class="donut-legend-left"><div class="donut-legend-dot" style="background:#3b82f6"></div>ส่ง รพ.</div><div class="donut-legend-val" id="pl-hosp" style="color:#3b82f6">0</div></div>
+          <div class="donut-legend-item"><div class="donut-legend-left"><div class="donut-legend-dot" style="background:#22c55e"></div>กลับบ้าน</div><div class="donut-legend-val" id="pl-home" style="color:#22c55e">0</div></div>
+          <div class="donut-legend-item"><div class="donut-legend-left"><div class="donut-legend-dot" style="background:#df1bbe"></div>จุดพบญาติ</div><div class="donut-legend-val" id="pl-family" style="color:#df1bbe">0</div></div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">สัดส่วนความรุนแรงผู้ป่วย</div>
+        <div class="chart-card-sub">เปรียบเทียบระดับเคสทั้งหมด</div>
+        <div class="chart-wrap"><canvas id="chartCasePolar"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VEHICLES -->
+  <div id="tab-vehicles" class="tab-content">
+    <div class="form-card">
+      <div class="form-title" id="veh-form-title">🚑 เพิ่ม / แก้ไข ข้อมูลรถ</div>
+      <div class="form-grid">
+        <div class="form-group"><label>ประเภทรถ</label>
+          <select id="v-type"><option>รถพยาบาล</option><option>รถกู้ชีพ</option><option>รถกู้ภัย</option><option>รถบัญชาการ</option><option>รถดับเพลิง</option><option>รถตำรวจ</option><option>อื่นๆ</option></select></div>
+        <div class="form-group"><label>เลขทะเบียน</label><input type="text" id="v-plate" placeholder="เช่น กข-1234"></div>
+        <div class="form-group"><label>จำนวนคนประจำรถ</label><input type="number" id="v-crew" min="1" max="10" placeholder="3"></div>
+        <div class="form-group"><label>สังกัด</label><input type="text" id="v-dept" placeholder="เช่น รพ.สมุย"></div>
+        <div class="form-group"><label>เบอร์โทรศัพท์ (ไม่เกิน 10 หลัก)</label>
+          <input type="tel" id="v-phone" placeholder="0812345678" maxlength="10" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)"></div>
+        <div class="form-group"><label>สถานะ</label>
+          <select id="v-status"><option value="อยู่จุดเช็คอิน">อยู่จุดเช็คอิน</option><option value="ออกปฏิบัติงาน">ออกปฏิบัติงาน</option></select></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-submit" onclick="saveVehicle()">💾 บันทึก</button>
+        <button class="btn-excel" onclick="exportVehicles()">📥 Excel</button>
+        <button class="btn-clear" onclick="clearVehicleForm()">ล้าง</button>
+      </div>
+    </div>
+    <div class="table-card">
+      <div class="table-head-row">
+        <span class="section-title">รายการรถ (<span id="v-count">0</span>)</span>
+        <div class="filter-row">
+          <button class="filter-btn active" onclick="filterVeh('all',this)">ทั้งหมด</button>
+          <button class="filter-btn" onclick="filterVeh('อยู่จุดเช็คอิน',this)">จุดเช็คอิน</button>
+          <button class="filter-btn" onclick="filterVeh('ออกปฏิบัติงาน',this)">ออกหน้างาน</button>
+        </div>
+      </div>
+      <div class="search-row">
+        <input type="text" id="v-search-plate" placeholder="🔍 ค้นหาทะเบียน" onkeyup="searchVehicles()">
+        <select id="v-search-type" onchange="searchVehicles()">
+          <option value="">ทุกประเภทรถ</option>
+          <option value="รถพยาบาล">รถพยาบาล</option>
+          <option value="รถกู้ชีพ">รถกู้ชีพ</option>
+          <option value="รถกู้ภัย">รถกู้ภัย</option>
+          <option value="รถบัญชาการ">รถบัญชาการ</option>
+          <option value="รถดับเพลิง">รถดับเพลิง</option>
+          <option value="รถตำรวจ">รถตำรวจ</option>
+          <option value="อื่นๆ">อื่นๆ</option>
+        </select>
+      </div>
+      <!-- Desktop table -->
+      <div class="table-scroll desktop-table">
+        <table><thead><tr><th>#</th><th>ประเภทรถ</th><th>ทะเบียน</th><th>คน</th><th>สังกัด</th><th>โทร</th><th>สถานะ (คลิกเปลี่ยน)</th><th>จัดการ</th></tr></thead>
+        <tbody id="v-table-d"><tr><td colspan="8" class="empty-state">ยังไม่มีข้อมูล</td></tr></tbody></table>
+      </div>
+      <!-- Mobile cards -->
+      <div class="mobile-cards" id="v-table-m"></div>
+    </div>
+  </div>
+
+  <!-- PATIENTS -->
+  <div id="tab-patients" class="tab-content">
+    <div class="form-card">
+      <div class="form-title" id="pat-form-title">🏥 เพิ่ม / แก้ไข ข้อมูลผู้ป่วย</div>
+      <div class="form-grid">
+        <div class="form-group"><label>ชื่อ-นามสกุล</label><input type="text" id="p-name" placeholder="ชื่อ หรือ ไม่ทราบ"></div>
+        <div class="form-group"><label>ระดับเคส (Triage)</label>
+          <select id="p-case">
+            <option value="เขียว">🟢 เขียว - ไม่รุนแรง</option>
+            <option value="เหลือง">🟡 เหลือง - ปานกลาง</option>
+            <option value="แดง">🔴 แดง - รุนแรง</option>
+            <option value="ดำ">⚫ ดำ - เสียชีวิต</option>
+          </select></div>
+        <div class="form-group"><label>อาการเบื้องต้น</label><input type="text" id="p-status" placeholder="เช่น หมดสติ, กระดูกหัก"></div>
+        <div class="form-group"><label>การเคลื่อนย้ายผู้ป่วย</label>
+          <select id="p-transfer">
+            <option value="อยู่จุดคัดแยก">อยู่จุดคัดแยก</option>
+            <option value="ส่ง รพ.">ส่ง รพ.</option>
+            <option value="กลับบ้าน">กลับบ้าน</option>
+            <option value="จุดพบญาติ">จุดพบญาติ</option>
+          </select></div>
+        <div class="form-group full"><label>หมายเหตุ</label><input type="text" id="p-note" placeholder="ข้อมูลเพิ่มเติม"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-submit" onclick="savePatient()">💾 บันทึก</button>
+        <button class="btn-excel" onclick="exportPatients()">📥 Excel</button>
+        <button class="btn-clear" onclick="clearPatientForm()">ล้าง</button>
+      </div>
+    </div>
+    <div class="table-card">
+      <div class="table-head-row">
+        <span class="section-title">รายการผู้ป่วย (<span id="p-count">0</span>)</span>
+        <div class="filter-row">
+          <button class="filter-btn active" onclick="filterPat('all',this)">ทั้งหมด</button>
+          <button class="filter-btn" onclick="filterPat('เขียว',this)">🟢</button>
+          <button class="filter-btn" onclick="filterPat('เหลือง',this)">🟡</button>
+          <button class="filter-btn" onclick="filterPat('แดง',this)">🔴</button>
+          <button class="filter-btn" onclick="filterPat('ดำ',this)">⚫</button>
+        </div>
+      </div>
+      <div class="search-row">
+        <input type="text" id="p-search-name" placeholder="🔍 ค้นหาชื่อผู้ป่วย" onkeyup="searchPatients()">
+        <select id="p-search-transfer" onchange="searchPatients()">
+          <option value="">ทุกจุดที่อยู่</option>
+          <option value="อยู่จุดคัดแยก">อยู่จุดคัดแยก</option>
+          <option value="ส่ง รพ.">ส่ง รพ.</option>
+          <option value="กลับบ้าน">กลับบ้าน</option>
+          <option value="จุดพบญาติ">จุดพบญาติ</option>
+        </select>
+      </div>
+      <!-- Desktop table -->
+      <div class="table-scroll desktop-table">
+        <table><thead><tr><th>#</th><th>ชื่อ</th><th>เคส</th><th>อาการ</th><th>การเคลื่อนย้ายผู้ป่วย (คลิกเปลี่ยน)</th><th>หมายเหตุ</th><th>เวลา</th><th>จัดการ</th></tr></thead>
+        <tbody id="p-table-d"><tr><td colspan="8" class="empty-state">ยังไม่มีข้อมูล</td></tr></tbody></table>
+      </div>
+      <!-- Mobile cards -->
+      <div class="mobile-cards" id="p-table-m"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV (mobile only) -->
+  <div class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button class="bottom-nav-btn active" id="bn-dashboard" onclick="showTab('dashboard')">
+        <div class="bottom-nav-icon">📊</div><span>Dashboard</span>
+      </button>
+      <button class="bottom-nav-btn" id="bn-vehicles" onclick="showTab('vehicles')">
+        <div class="bottom-nav-icon">🚑</div><span>ข้อมูลรถ</span>
+      </button>
+      <button class="bottom-nav-btn" id="bn-patients" onclick="showTab('patients')">
+        <div class="bottom-nav-icon">🏥</div><span>ผู้ป่วย</span>
+      </button>
+    </div>
+  </div>
+</div>
+<div class="success-toast" id="toast"></div>
+<script src="script.js"></script>
+</body>
+</html>
